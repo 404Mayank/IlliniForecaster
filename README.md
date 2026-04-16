@@ -1,84 +1,67 @@
-# IlliniForecaster: UIUC GPA Prediction Pipeline
+# IlliniForecaster: UIUC GPA Prediction
 
-This repository hosts a machine learning pipeline and interactive Streamlit web application designed to forecast section-level average GPAs for courses at the University of Illinois Urbana-Champaign (UIUC). It serves as the primary artifact for MUJ's ML Subject Project.
+A machine learning project and web app to predict average course GPAs at the University of Illinois Urbana-Champaign (UIUC). Created for MUJ's ML Subject Project.
+
+## Dataset Credit
+This project uses the excellent [UIUC GPA Dataset](https://discovery.cs.illinois.edu/dataset/gpa/) provided by Wade Fagen-Ulmschneider and the UIUC Discovery team. All data comes directly from their repository.
 
 ## Overview
+The goal is to predict the `avg_gpa` of a course section using past data. GPAs are calculated from standard grade points (`A+` = 4.0 ... `F` = 0.0), ignoring students who withdrew (`W`).
 
-The core objective is to accurately predict the `avg_gpa` of a given course section based on historical grade data. The target variable is derived directly from raw grade counts (`A+` through `F`, excluding `W`), where `avg_gpa = weighted_grade_points / graded_students`. 
+We trained three models:
+1. **LightGBM** (Best performer: fast and accurate)
+2. **XGBoost** (Strong baseline)
+3. **Random Forest** (Stable, reliable baseline)
 
-The web application (`src/app.py`) provides an interactive interface to manipulate input parameters and view real-time predictions alongside SHAP (SHapley Additive exPlanations) values to interpret model feature importance.
+## How It Works
 
-## Technical Architecture & Modeling
+### The Data Split (80/20)
+To make real-world predictions, we split our data by time. The oldest 80% of semesters are used for training, and the newest 20% are kept hidden for testing. This prevents the model from "cheating" by looking into the future.
 
-The predictive modeling pipeline is housed in `src/model_comparison.py`, evaluating three regressors against the target:
+### Features Used
+The models make predictions based on:
+1. `course_level`: Extracted from the course number (e.g., 100, 200).
+2. `class_size`: Total students in the section.
+3. `Term`: Fall, Spring, Summer, or Winter.
+4. `subject_hist_gpa`: The subject's historical average GPA.
+5. `instructor_hist_gpa`: The instructor's historical average GPA.
 
-1.  **LightGBM (`lightgbm.LGBMRegressor`)**: A gradient boosting framework that utilizes tree-based learning algorithms. It is configured to grow trees leaf-wise rather than depth-wise, optimizing for lower loss. Key parameters include `learning_rate=0.05`, `num_leaves=31`, `subsample=0.9`, and `colsample_bytree=0.9`. In baseline tests, this model achieved the lowest RMSE.
-2.  **XGBoost (`xgboost.XGBRegressor`)**: A robust, distributed gradient boosting library. It builds trees depth-wise. Key parameters mirror the LightGBM configuration for a controlled baseline: `max_depth=6`, `learning_rate=0.05`, `subsample=0.9`, and `colsample_bytree=0.9`.
-3.  **Random Forest (`sklearn.ensemble.RandomForestRegressor`)**: An ensemble learning method constructing multiple decision trees via bootstrap aggregation (bagging). It serves as a strong, variance-reducing baseline with `n_estimators=300` and `min_samples_leaf=2`.
+*Note: For historical GPAs, the model only uses data from previous semesters to avoid data leakage.*
 
-### Temporal Validation & Split
-
-To evaluate real-world predictive performance and prevent look-ahead bias, a strict chronological train/test split is enforced.
-
--   **Temporal Indexing**: Every semester is assigned a sequential index based on chronological order (e.g., Spring 2020 < Fall 2020 ...).
--   **Split Methodology**: An 80/20 chronological partition is used. The earliest 80% of terms (approx. 61,000 rows) are isolated for training, while the most recent 20% of terms (approx. 15,700 rows) are held out purely for testing.
--   **Purpose**: This guarantees the models are evaluated identically to a production deployment scenario—training on past data to predict future, unseen term results.
-
-### Leakage-Safe Feature Engineering
-
-The pipeline engineers historical features that summarize past performance. Crucially, these calculations rigorously obey the temporal index, ensuring that for any given term $T$, the historical aggregations only incorporate data from terms $T-1, T-2, \ldots, T_0$. 
-
-The engineering process yields the following features delivered to the models:
-
-1.  `course_level`: An integer representation derived from the course number (e.g., CS 225 -> 200).
-2.  `class_size`: The total number of graded students in the section.
-3.  `Term`: Categorical representation (`Fall`, `Spring`, `Summer`, `Winter`), one-hot encoded by the pipeline.
-4.  `subject_hist_gpa`: The historically accumulated average GPA for the selected subject (e.g., `CS`, `STAT`).
-5.  `instructor_hist_gpa`: The historically accumulated average GPA for the selected primary instructor.
-
-If an instructor or subject is unobserved in the historical window preceding a given prediction row, the value falls back to the global historical mean up to that point.
-
-## Application Interface (Streamlit)
-
-The web UI provides an intuitive, preset-driven control panel mapped to the engineered features. The UI logic abstracts the historical target encoding away from the user:
-
--   **Global Data Alignment**: The Streamlit app loads the full historical dataset to construct definitive lookup tables.
--   **User Inputs**:
-    -   `Subject` (Dropdown)
-    -   `Instructor Name` (Dropdown, dynamically filtered by `Subject`)
-    -   `Term` (Dropdown)
-    -   `Course Level` (Select Slider: 100-700)
-    -   `Class Size` (Integer Slider)
--   **Tooltip Explanations**: A prominent "?" tooltip provides insight into how the predictive engine operates. It details that `Subject` and `Instructor` inputs are implicitly mapped to `subject_hist_gpa` and `instructor_hist_gpa` using the full historical dataset average computed prior to inference. It specifically notes that if an instructor is selected who has never taught prior to the prediction context, the model defaults to the global university average.
--   **Visualization**: SHAP values are extracted dynamically using `shap.TreeExplainer` on the best-performing model artifact and rendered via Matplotlib. The GUI theme is customized (CSS injection) from default pink to a professional blue scheme, ensuring high-contrast visibility for SHAP plots in both Light and Dark modes.
+## Web App (Streamlit)
+You can test the models interactively on the web app (`src/app.py`):
+- **Inputs**: Easy-to-use dropdowns and sliders for Subject, Instructor, Term, Course Level, and Class Size.
+- **Explainability**: The app shows a dynamic SHAP chart, breaking down exactly how each input affected the final predicted GPA.
+- **Theming**: Dark and light modes are fully supported.
 
 ## Setup and Execution
 
-1.  **Clone and Enter Directory**:
+1. **Clone the Repo**:
     ```bash
     git clone https://github.com/404Mayank/IlliniForecaster.git
     cd IlliniForecaster
     ```
 
-2.  **Environment Initialization**:
-    It is recommended to use a virtual environment.
+2. **Set up Environment**:
     ```bash
     python3 -m venv .venv
     source .venv/bin/activate
     ```
 
-3.  **Install Dependencies**:
+3. **Install Dependencies**:
     ```bash
     pip install -r requirements.txt
     ```
 
-4.  **Execute Model Pipeline (Training)**:
-    This command downloads the latest data, runs the chronologically split training pipeline, evaluates the models, and persists the `best_model.joblib` to the `artifacts/` directory.
+4. **Train the Model**:
     ```bash
     python src/model_comparison.py
     ```
 
-5.  **Launch Web Application**:
+5. **Run the App**:
     ```bash
     streamlit run src/app.py
     ```
+
+## License
+This project is licensed under the [MIT License](LICENSE).
