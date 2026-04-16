@@ -1,5 +1,7 @@
 # IlliniForecaster: UIUC GPA Prediction
 
+🚀 **Live App:** [https://illiniforecaster.streamlit.app/](https://illiniforecaster.streamlit.app/)
+
 A machine learning project and web app to predict average course GPAs at the University of Illinois Urbana-Champaign (UIUC). Created for MUJ's ML Subject Project.
 
 ## Dataset Credit
